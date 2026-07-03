@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.claude/
+inspect_data.py
+test_data.py
+nba_features.csv

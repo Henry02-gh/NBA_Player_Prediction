@@ -716,21 +716,18 @@ with tab2:
 # =========================================================
 with tab3:
     st.info(
-        "A quick summary of how accurate the prediction model is. "
-        "Full technical details for developers are tucked away in the **Advanced** section below."
+        "A quick summary of how accurate the prediction model is, "
+        "plus an accuracy check across all 10 players."
     )
 
     if model_bundle:
         mae_vals  = model_bundle.get("mae", [])
-        r2_vals   = model_bundle.get("r2", [])
         p_mae_all = model_bundle.get("player_mae", {})
-        p_r2_all  = model_bundle.get("player_r2", {})
         p_tg_all  = model_bundle.get("player_train_games", {})
 
-        if mae_vals and r2_vals:
+        if mae_vals:
             st.subheader("📊 How Accurate Is the Model?")
             sel_mae = p_mae_all.get(selected_player, [])
-            sel_r2  = p_r2_all.get(selected_player, [])
             tg = p_tg_all.get(selected_player, '?')
             if sel_mae and all(v is not None for v in sel_mae):
                 st.caption(
@@ -755,105 +752,6 @@ with tab3:
                     m4.metric("Field Goal %", f"±{mae_vals[3]*100:.1f}%")
             st.markdown("---")
 
-        with st.expander("🔧 Advanced: Model Details (for developers)"):
-            st.caption(
-                "Technical diagnostics for the machine-learning model — feature importances, R² scores, "
-                "and algorithm comparison. Regular users can safely skip this section."
-            )
-
-            # R² scores (moved here from the metrics above to keep them simple)
-            adv_r2 = p_r2_all.get(selected_player, [])
-            if adv_r2 and all(v is not None for v in adv_r2):
-                st.write(
-                    f"**R² scores — {selected_player}'s individual model:** "
-                    f"PTS {adv_r2[0]:.3f} · REB {adv_r2[1]:.3f} · AST {adv_r2[2]:.3f} · FG% {adv_r2[3]:.3f}"
-                )
-            elif r2_vals:
-                r2_line = f"PTS {r2_vals[0]:.3f} · REB {r2_vals[1]:.3f} · AST {r2_vals[2]:.3f}"
-                if len(r2_vals) >= 4 and r2_vals[3] is not None:
-                    r2_line += f" · FG% {r2_vals[3]:.3f}"
-                st.write(f"**R² scores — cross-player average:** {r2_line}")
-
-            # Use the selected player's own feature importances when available
-            p_imps_all = model_bundle.get("player_importances", {})
-            if selected_player in p_imps_all:
-                feat_imps = p_imps_all[selected_player]
-                imp_label = f"Feature Importances — {selected_player}'s Individual Model"
-            else:
-                feat_imps = model_bundle.get("feature_importances", {})
-                imp_label = "Feature Importances — Cross-Player Average"
-
-            if feat_imps:
-                st.markdown("---")
-                st.subheader("🔬 Feature Importance Rankings")
-                st.caption(imp_label)
-                imp_df = (
-                    pd.DataFrame(list(feat_imps.items()), columns=['Feature', 'Importance'])
-                    .sort_values('Importance', ascending=True)
-                    .reset_index(drop=True)
-                )
-                fig_imp, ax_imp = plt.subplots(figsize=(8, 4))
-                bars = ax_imp.barh(imp_df['Feature'], imp_df['Importance'], color='steelblue')
-                ax_imp.axvline(x=1 / len(imp_df), color='red', linestyle='--', linewidth=1,
-                               label=f'Uniform baseline (1/{len(imp_df)})')
-                for bar, val in zip(bars, imp_df['Importance']):
-                    ax_imp.text(bar.get_width() + 0.002, bar.get_y() + bar.get_height() / 2,
-                                f'{val:.3f}', va='center', fontsize=8)
-                ax_imp.set_xlabel('Importance Score')
-                ax_imp.set_title('Random Forest Feature Importances')
-                ax_imp.legend(fontsize=8)
-                plt.tight_layout()
-                st.pyplot(fig_imp)
-                plt.close(fig_imp)
-
-            active_features = model_bundle.get("feature_cols", [])
-            if active_features:
-                st.markdown("---")
-                st.write(f"**Active Feature Vector ({len(active_features)} features):** `{', '.join(active_features)}`")
-
-            algo_cmp_avg = model_bundle.get("algo_comparison_avg", {})
-            if algo_cmp_avg:
-                st.markdown("---")
-                st.subheader("📊 ML Algorithm Comparison")
-                st.caption(
-                    "Four algorithms trained on the same per-player data (pre-2025-26) and evaluated on the "
-                    "genuine 2025-26 holdout set. Random Forest achieved the lowest average PTS MAE and was "
-                    "selected as the final prediction model."
-                )
-                ALGO_ORDER = ['Random Forest', 'Linear Regression', 'Ridge Regression', 'Decision Tree']
-                cmp_rows = []
-                for algo in ALGO_ORDER:
-                    if algo in algo_cmp_avg:
-                        m = algo_cmp_avg[algo]
-                        cmp_rows.append({
-                            'Algorithm':  algo,
-                            'PTS MAE':    f"{m[0]:.2f}",
-                            'REB MAE':    f"{m[1]:.2f}",
-                            'AST MAE':    f"{m[2]:.2f}",
-                            'FG% MAE':    f"{m[3]*100:.2f}pp",
-                            'Selected':   '✅' if algo == 'Random Forest' else '',
-                        })
-                if cmp_rows:
-                    st.dataframe(pd.DataFrame(cmp_rows), use_container_width=True, hide_index=True)
-
-                chart_data = [(a, algo_cmp_avg[a][0]) for a in ALGO_ORDER if a in algo_cmp_avg]
-                if chart_data:
-                    fig_ac, ax_ac = plt.subplots(figsize=(7, 3))
-                    labels = [r[0] for r in chart_data]
-                    values = [r[1] for r in chart_data]
-                    colors = ['steelblue' if a == 'Random Forest' else 'lightgray' for a in labels]
-                    bars_ac = ax_ac.bar(labels, values, color=colors)
-                    for bar, val in zip(bars_ac, values):
-                        ax_ac.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
-                                   f'{val:.2f}', ha='center', va='bottom', fontsize=9)
-                    ax_ac.set_ylabel('Avg PTS MAE (lower = better)')
-                    ax_ac.set_title('PTS Prediction Error by Algorithm — 2025-26 Holdout')
-                    ax_ac.set_ylim(0, max(values) * 1.25)
-                    plt.xticks(rotation=15, ha='right')
-                    plt.tight_layout()
-                    st.pyplot(fig_ac)
-                    plt.close(fig_ac)
-                    st.caption("Blue = selected model (Random Forest) · Gray = comparison baselines · Lower bar = better accuracy")
     else:
         st.warning("No model bundle loaded. Run `train_models.py` to generate the model.")
 

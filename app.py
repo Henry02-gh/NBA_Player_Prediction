@@ -11,7 +11,7 @@ import seaborn as sns
 
 st.set_page_config(page_title="ProBall Analytics Engine", layout="wide", page_icon="🏀")
 st.title("🏀 ProBall Analytics & Predictive Scouting Engine")
-st.write("An advanced alternative to traditional static portals, utilizing a temporal season-by-season backtesting architecture.")
+st.write("See how your favorite NBA players are likely to perform in their next game — and check how accurate the predictions really are.")
 st.markdown("---")
 
 TEAM_ABBREVIATIONS = {
@@ -288,7 +288,7 @@ except Exception:
 full_table, train_split, valid_split, is_fallback = get_historical_matchups(selected_player, selected_opponent)
 all_player_df = get_all_player_data(selected_player)
 
-tab1, tab2, tab3 = st.tabs(["📊 Split Tracking & Projections", "📉 2025-2026 Season Backtest Validation", "⚙️ Pipeline Maintenance"])
+tab1, tab2, tab3 = st.tabs(["📊 Player Stats & Prediction", "📉 How Accurate Is It?", "⚙️ Model Info (Advanced)"])
 
 
 # =========================================================
@@ -296,11 +296,9 @@ tab1, tab2, tab3 = st.tabs(["📊 Split Tracking & Projections", "📉 2025-2026
 # =========================================================
 with tab1:
     st.info(
-        "**Tab 1 — Forward-Looking Scenario Simulator** · "
-        "Browse H2H history and season stats, then use the ML Simulator to project a **future game** "
-        "using conditions you choose (venue, fatigue). "
-        "➡️ After running a scenario, switch to **Tab 2** to see how the model performed on real 2025-26 games "
-        "against the same opponent — your scenario will appear there as a reference card."
+        "Browse the player's stats and history against this opponent, then scroll down to "
+        "**predict their next game**. ➡️ Afterwards, open the **How Accurate Is It?** tab to see how "
+        "the predictions compare against real game results."
     )
 
     if not all_player_df.empty:
@@ -448,11 +446,10 @@ with tab1:
         st.caption(f"{source_note}  |  Modifier **{def_mod:.2f}x** applied to PTS & AST projections")
 
     st.markdown("---")
-    st.subheader("🔮 Matchup Scenario Simulator")
+    st.subheader("🔮 Predict the Next Game")
     st.caption(
-        "Choose the upcoming game conditions below. The model uses your H2H averages as the player's "
-        "baseline — reflecting their track record specifically against this opponent — plus their recent 5-game "
-        "form for current momentum, then applies the defensive strength modifier from the sidebar."
+        "Choose the game conditions below. The prediction is based on how this player has performed "
+        "against this opponent before, their recent 5-game form, and how strong the opponent's defense is."
     )
 
     rolling_pts, rolling_reb, rolling_ast = baseline_pts, baseline_reb, baseline_ast
@@ -470,13 +467,13 @@ with tab1:
 
     col1, col2 = st.columns(2)
     with col1:
-        venue = st.radio("Upcoming Game Location", ["🏟️ Home Ground Advantage", "✈️ Road Setup"])
+        venue = st.radio("Where is the game played?", ["🏟️ Home Game", "✈️ Away Game"])
         is_home_val = 1 if "Home" in venue else 0
     with col2:
-        is_b2b_val = st.checkbox("Back-to-Back schedule? (Fatigue Vector Input)")
+        is_b2b_val = st.checkbox("Playing back-to-back games? (player may be more tired)")
         is_b2b_input = 1 if is_b2b_val else 0
 
-    if st.button("🔥 Execute Scenario Matrix Run", use_container_width=True):
+    if st.button("🔮 Predict Performance", use_container_width=True):
         if model_bundle:
             feature_map = {
                 'IS_HOME': is_home_val,
@@ -526,8 +523,8 @@ with tab1:
                 f"| Defense modifier: **{def_mod:.2f}x** (Rank #{opponent_def_rank} — {tier_label})"
             )
             st.success(
-                "✅ Scenario saved. Switch to **Tab 2** to see real 2025-26 game results for this matchup "
-                "— your scenario is pinned at the top of that tab for direct comparison."
+                "✅ Prediction saved. Open the **How Accurate Is It?** tab to see real 2025-26 game results "
+                "for this matchup — your prediction is pinned at the top of that tab for easy comparison."
             )
         else:
             st.error("Model not loaded. Run `train_models.py` to generate 'nba_best_model.pkl'.")
@@ -538,15 +535,9 @@ with tab1:
 # =========================================================
 with tab2:
     st.info(
-        "**Tab 2 — Retrospective Accuracy Validator** · "
-        "Uses the same player + opponent selected in Tab 1. "
-        "Shows every 2025-26 game that player played against that opponent — Regular Season and Playoffs — "
-        "and compares the model's prediction against the actual box score. "
-        "The model was trained only on pre-2025-26 data, so these are genuine out-of-sample results.  \n"
-        "**Why does this differ from Tab 1?** "
-        "Tab 1 uses *your chosen* conditions and H2H averages as the baseline. "
-        "Tab 2 uses *actual* game conditions and the player's overall pre-2025-26 training averages — "
-        "what the model genuinely knew before the season began."
+        "This tab shows every real 2025-26 game between your selected player and opponent, "
+        "and compares what the model **predicted** against what **actually happened**. "
+        "The model never saw these games during training, so this is a fair test of its accuracy."
     )
 
     scenario = st.session_state.get('last_scenario', {})
@@ -576,7 +567,7 @@ with tab2:
         )
 
     st.markdown("---")
-    st.subheader("📉 Empirical Verification Dashboard (2025-2026 Season Results)")
+    st.subheader("📉 Prediction vs Reality — 2025-26 Season Results")
 
     if is_fallback or all_player_df.empty:
         st.error(
@@ -683,26 +674,24 @@ with tab2:
         accuracy_est = max(0.0, 100.0 - (mean_error / base_p * 100)) if base_p > 0 else 0.0
 
         v1, v2, v3, v4, v5 = st.columns(5)
-        v1.metric("PTS MAE", f"{mean_error:.2f} pts")
-        v2.metric("REB MAE", f"{mean_reb_error:.2f} reb")
-        v3.metric("AST MAE", f"{mean_ast_error:.2f} ast")
-        v4.metric("FG% MAE", f"{mean_fgp_error*100:.2f}pp")
-        v5.metric("PTS Accuracy Est.", f"{accuracy_est:.1f}%", delta="Out-of-Sample 2025-26")
+        v1.metric("Points — Avg Miss", f"±{mean_error:.1f} pts",
+                  help="On average, the predicted points were this far from the player's actual points.")
+        v2.metric("Rebounds — Avg Miss", f"±{mean_reb_error:.1f}",
+                  help="On average, the predicted rebounds were this far from the actual rebounds.")
+        v3.metric("Assists — Avg Miss", f"±{mean_ast_error:.1f}",
+                  help="On average, the predicted assists were this far from the actual assists.")
+        v4.metric("FG% — Avg Miss", f"±{mean_fgp_error*100:.1f}%",
+                  help="On average, the predicted field-goal percentage was this far from the actual one.")
+        v5.metric("Points Accuracy", f"{accuracy_est:.1f}%",
+                  help="How close the point predictions were overall — 100% would mean a perfect prediction every game.")
         st.caption(
-            "📊 **Survey benchmark:** 80.6% of respondents expect prediction accuracy of 80–90% to consider "
-            "the system trustworthy. PTS Accuracy = max(0, 100% − MAE/Avg PTS × 100). FG% MAE is in percentage points (pp)."
+            "💡 Smaller \"miss\" numbers mean better predictions. "
+            "For reference, most fans surveyed said 80–90% accuracy is good enough to trust a prediction system."
         )
 
         if len(absolute_errors) >= 3:
             st.markdown("---")
-            st.subheader("📊 Prediction Error Per Game")
-            error_chart = pd.DataFrame({
-                'Game': verify_display_df['Date'],
-                'Absolute Error (PTS)': absolute_errors
-            }).set_index('Game')
-            st.bar_chart(error_chart, height=220)
-
-            st.subheader("📊 Predicted vs Actual PTS")
+            st.subheader("📊 Predicted vs Actual Points")
             cmp_data = pd.DataFrame({
                 'Game': verify_display_df['Date'].str[-5:],
                 'Predicted': verify_display_df['Pred PTS'].values,
@@ -719,7 +708,7 @@ with tab2:
             plt.tight_layout()
             st.pyplot(fig_cmp)
             plt.close(fig_cmp)
-            st.caption("Blue = model prediction · Orange = actual box score result. Bars close in height indicate accurate predictions.")
+            st.caption("Blue = predicted · Orange = what actually happened. When the two bars are close in height, the prediction was accurate.")
 
 
 # =========================================================
@@ -727,9 +716,8 @@ with tab2:
 # =========================================================
 with tab3:
     st.info(
-        "**Tab 3 — Pipeline Maintenance & Model Diagnostics** · "
-        "Inspect trained model performance metrics, feature importances, and system configuration. "
-        "Re-run `train_models.py` after fetching new data to update the model bundle with fresh metrics."
+        "A quick summary of how accurate the prediction model is. "
+        "Full technical details for developers are tucked away in the **Advanced** section below."
     )
 
     if model_bundle:
@@ -740,129 +728,147 @@ with tab3:
         p_tg_all  = model_bundle.get("player_train_games", {})
 
         if mae_vals and r2_vals:
-            st.subheader("📊 Model Performance Metrics (2025-2026 Out-of-Sample Backtest)")
+            st.subheader("📊 How Accurate Is the Model?")
             sel_mae = p_mae_all.get(selected_player, [])
             sel_r2  = p_r2_all.get(selected_player, [])
             tg = p_tg_all.get(selected_player, '?')
             if sel_mae and all(v is not None for v in sel_mae):
                 st.caption(
-                    f"Showing **{selected_player}** individual model — trained on **{tg} games**. "
-                    "Switch players in the sidebar to see their model's metrics."
+                    f"Showing **{selected_player}**'s personal prediction model, built from **{tg} past games**. "
+                    "Each number shows how far off the predictions typically are — smaller is better."
                 )
                 m1, m2, m3, m4 = st.columns(4)
-                m1.metric("PTS MAE", f"{sel_mae[0]:.2f} pts", delta=f"R² = {sel_r2[0]:.3f}")
-                m2.metric("REB MAE", f"{sel_mae[1]:.2f} reb", delta=f"R² = {sel_r2[1]:.3f}")
-                m3.metric("AST MAE", f"{sel_mae[2]:.2f} ast", delta=f"R² = {sel_r2[2]:.3f}")
-                m4.metric("FG% MAE", f"{sel_mae[3]*100:.2f}pp", delta=f"R² = {sel_r2[3]:.3f}")
+                m1.metric("Points", f"±{sel_mae[0]:.1f} pts")
+                m2.metric("Rebounds", f"±{sel_mae[1]:.1f}")
+                m3.metric("Assists", f"±{sel_mae[2]:.1f}")
+                m4.metric("Field Goal %", f"±{sel_mae[3]*100:.1f}%")
             else:
                 st.caption(
-                    f"No 2025-26 test data for **{selected_player}** — showing cross-player averages."
+                    f"No 2025-26 test games for **{selected_player}** yet — showing the average across all players. "
+                    "Each number shows how far off the predictions typically are — smaller is better."
                 )
                 m1, m2, m3, m4 = st.columns(4)
-                m1.metric("PTS MAE (avg)", f"{mae_vals[0]:.2f} pts", delta=f"R² = {r2_vals[0]:.3f}")
-                m2.metric("REB MAE (avg)", f"{mae_vals[1]:.2f} reb", delta=f"R² = {r2_vals[1]:.3f}")
-                m3.metric("AST MAE (avg)", f"{mae_vals[2]:.2f} ast", delta=f"R² = {r2_vals[2]:.3f}")
+                m1.metric("Points", f"±{mae_vals[0]:.1f} pts")
+                m2.metric("Rebounds", f"±{mae_vals[1]:.1f}")
+                m3.metric("Assists", f"±{mae_vals[2]:.1f}")
                 if len(mae_vals) >= 4 and mae_vals[3] is not None:
-                    m4.metric("FG% MAE (avg)", f"{mae_vals[3]*100:.2f}pp", delta=f"R² = {r2_vals[3]:.3f}")
+                    m4.metric("Field Goal %", f"±{mae_vals[3]*100:.1f}%")
             st.markdown("---")
 
-        # Use the selected player's own feature importances when available
-        p_imps_all = model_bundle.get("player_importances", {})
-        if selected_player in p_imps_all:
-            feat_imps = p_imps_all[selected_player]
-            imp_label = f"Feature Importances — {selected_player}'s Individual Model"
-        else:
-            feat_imps = model_bundle.get("feature_importances", {})
-            imp_label = "Feature Importances — Cross-Player Average"
-
-        if feat_imps:
-            st.subheader("🔬 Feature Importance Rankings")
-            st.caption(imp_label)
-            imp_df = (
-                pd.DataFrame(list(feat_imps.items()), columns=['Feature', 'Importance'])
-                .sort_values('Importance', ascending=True)
-                .reset_index(drop=True)
-            )
-            fig_imp, ax_imp = plt.subplots(figsize=(8, 4))
-            bars = ax_imp.barh(imp_df['Feature'], imp_df['Importance'], color='steelblue')
-            ax_imp.axvline(x=1 / len(imp_df), color='red', linestyle='--', linewidth=1,
-                           label=f'Uniform baseline (1/{len(imp_df)})')
-            for bar, val in zip(bars, imp_df['Importance']):
-                ax_imp.text(bar.get_width() + 0.002, bar.get_y() + bar.get_height() / 2,
-                            f'{val:.3f}', va='center', fontsize=8)
-            ax_imp.set_xlabel('Importance Score')
-            ax_imp.set_title('Random Forest Feature Importances')
-            ax_imp.legend(fontsize=8)
-            plt.tight_layout()
-            st.pyplot(fig_imp)
-            plt.close(fig_imp)
-            st.markdown("---")
-
-        active_features = model_bundle.get("feature_cols", [])
-        if active_features:
-            st.write(f"**Active Feature Vector ({len(active_features)} features):** `{', '.join(active_features)}`")
-
-        algo_cmp_avg = model_bundle.get("algo_comparison_avg", {})
-        if algo_cmp_avg:
-            st.markdown("---")
-            st.subheader("📊 ML Algorithm Comparison")
+        with st.expander("🔧 Advanced: Model Details (for developers)"):
             st.caption(
-                "Four algorithms trained on the same per-player data (pre-2025-26) and evaluated on the "
-                "genuine 2025-26 holdout set. Random Forest achieved the lowest average PTS MAE and was "
-                "selected as the final prediction model."
+                "Technical diagnostics for the machine-learning model — feature importances, R² scores, "
+                "and algorithm comparison. Regular users can safely skip this section."
             )
-            ALGO_ORDER = ['Random Forest', 'Linear Regression', 'Ridge Regression', 'Decision Tree']
-            cmp_rows = []
-            for algo in ALGO_ORDER:
-                if algo in algo_cmp_avg:
-                    m = algo_cmp_avg[algo]
-                    cmp_rows.append({
-                        'Algorithm':  algo,
-                        'PTS MAE':    f"{m[0]:.2f}",
-                        'REB MAE':    f"{m[1]:.2f}",
-                        'AST MAE':    f"{m[2]:.2f}",
-                        'FG% MAE':    f"{m[3]*100:.2f}pp",
-                        'Selected':   '✅' if algo == 'Random Forest' else '',
-                    })
-            if cmp_rows:
-                st.dataframe(pd.DataFrame(cmp_rows), use_container_width=True, hide_index=True)
 
-            chart_data = [(a, algo_cmp_avg[a][0]) for a in ALGO_ORDER if a in algo_cmp_avg]
-            if chart_data:
-                fig_ac, ax_ac = plt.subplots(figsize=(7, 3))
-                labels = [r[0] for r in chart_data]
-                values = [r[1] for r in chart_data]
-                colors = ['steelblue' if a == 'Random Forest' else 'lightgray' for a in labels]
-                bars_ac = ax_ac.bar(labels, values, color=colors)
-                for bar, val in zip(bars_ac, values):
-                    ax_ac.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
-                               f'{val:.2f}', ha='center', va='bottom', fontsize=9)
-                ax_ac.set_ylabel('Avg PTS MAE (lower = better)')
-                ax_ac.set_title('PTS Prediction Error by Algorithm — 2025-26 Holdout')
-                ax_ac.set_ylim(0, max(values) * 1.25)
-                plt.xticks(rotation=15, ha='right')
+            # R² scores (moved here from the metrics above to keep them simple)
+            adv_r2 = p_r2_all.get(selected_player, [])
+            if adv_r2 and all(v is not None for v in adv_r2):
+                st.write(
+                    f"**R² scores — {selected_player}'s individual model:** "
+                    f"PTS {adv_r2[0]:.3f} · REB {adv_r2[1]:.3f} · AST {adv_r2[2]:.3f} · FG% {adv_r2[3]:.3f}"
+                )
+            elif r2_vals:
+                r2_line = f"PTS {r2_vals[0]:.3f} · REB {r2_vals[1]:.3f} · AST {r2_vals[2]:.3f}"
+                if len(r2_vals) >= 4 and r2_vals[3] is not None:
+                    r2_line += f" · FG% {r2_vals[3]:.3f}"
+                st.write(f"**R² scores — cross-player average:** {r2_line}")
+
+            # Use the selected player's own feature importances when available
+            p_imps_all = model_bundle.get("player_importances", {})
+            if selected_player in p_imps_all:
+                feat_imps = p_imps_all[selected_player]
+                imp_label = f"Feature Importances — {selected_player}'s Individual Model"
+            else:
+                feat_imps = model_bundle.get("feature_importances", {})
+                imp_label = "Feature Importances — Cross-Player Average"
+
+            if feat_imps:
+                st.markdown("---")
+                st.subheader("🔬 Feature Importance Rankings")
+                st.caption(imp_label)
+                imp_df = (
+                    pd.DataFrame(list(feat_imps.items()), columns=['Feature', 'Importance'])
+                    .sort_values('Importance', ascending=True)
+                    .reset_index(drop=True)
+                )
+                fig_imp, ax_imp = plt.subplots(figsize=(8, 4))
+                bars = ax_imp.barh(imp_df['Feature'], imp_df['Importance'], color='steelblue')
+                ax_imp.axvline(x=1 / len(imp_df), color='red', linestyle='--', linewidth=1,
+                               label=f'Uniform baseline (1/{len(imp_df)})')
+                for bar, val in zip(bars, imp_df['Importance']):
+                    ax_imp.text(bar.get_width() + 0.002, bar.get_y() + bar.get_height() / 2,
+                                f'{val:.3f}', va='center', fontsize=8)
+                ax_imp.set_xlabel('Importance Score')
+                ax_imp.set_title('Random Forest Feature Importances')
+                ax_imp.legend(fontsize=8)
                 plt.tight_layout()
-                st.pyplot(fig_ac)
-                plt.close(fig_ac)
-                st.caption("Blue = selected model (Random Forest) · Gray = comparison baselines · Lower bar = better accuracy")
+                st.pyplot(fig_imp)
+                plt.close(fig_imp)
+
+            active_features = model_bundle.get("feature_cols", [])
+            if active_features:
+                st.markdown("---")
+                st.write(f"**Active Feature Vector ({len(active_features)} features):** `{', '.join(active_features)}`")
+
+            algo_cmp_avg = model_bundle.get("algo_comparison_avg", {})
+            if algo_cmp_avg:
+                st.markdown("---")
+                st.subheader("📊 ML Algorithm Comparison")
+                st.caption(
+                    "Four algorithms trained on the same per-player data (pre-2025-26) and evaluated on the "
+                    "genuine 2025-26 holdout set. Random Forest achieved the lowest average PTS MAE and was "
+                    "selected as the final prediction model."
+                )
+                ALGO_ORDER = ['Random Forest', 'Linear Regression', 'Ridge Regression', 'Decision Tree']
+                cmp_rows = []
+                for algo in ALGO_ORDER:
+                    if algo in algo_cmp_avg:
+                        m = algo_cmp_avg[algo]
+                        cmp_rows.append({
+                            'Algorithm':  algo,
+                            'PTS MAE':    f"{m[0]:.2f}",
+                            'REB MAE':    f"{m[1]:.2f}",
+                            'AST MAE':    f"{m[2]:.2f}",
+                            'FG% MAE':    f"{m[3]*100:.2f}pp",
+                            'Selected':   '✅' if algo == 'Random Forest' else '',
+                        })
+                if cmp_rows:
+                    st.dataframe(pd.DataFrame(cmp_rows), use_container_width=True, hide_index=True)
+
+                chart_data = [(a, algo_cmp_avg[a][0]) for a in ALGO_ORDER if a in algo_cmp_avg]
+                if chart_data:
+                    fig_ac, ax_ac = plt.subplots(figsize=(7, 3))
+                    labels = [r[0] for r in chart_data]
+                    values = [r[1] for r in chart_data]
+                    colors = ['steelblue' if a == 'Random Forest' else 'lightgray' for a in labels]
+                    bars_ac = ax_ac.bar(labels, values, color=colors)
+                    for bar, val in zip(bars_ac, values):
+                        ax_ac.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
+                                   f'{val:.2f}', ha='center', va='bottom', fontsize=9)
+                    ax_ac.set_ylabel('Avg PTS MAE (lower = better)')
+                    ax_ac.set_title('PTS Prediction Error by Algorithm — 2025-26 Holdout')
+                    ax_ac.set_ylim(0, max(values) * 1.25)
+                    plt.xticks(rotation=15, ha='right')
+                    plt.tight_layout()
+                    st.pyplot(fig_ac)
+                    plt.close(fig_ac)
+                    st.caption("Blue = selected model (Random Forest) · Gray = comparison baselines · Lower bar = better accuracy")
     else:
         st.warning("No model bundle loaded. Run `train_models.py` to generate the model.")
 
     st.markdown("---")
-    st.subheader("📋 Full Temporal Accuracy Audit — All Players on 2025-26 Season")
+    st.subheader("📋 Accuracy Check — All 10 Players (2025-26 Season)")
     st.write(
-        "This table runs the trained model against **every 2025-26 game** for all 10 players — "
-        "games the model never saw during training (train cutoff: June 2025). "
-        "This is the definitive evidence of out-of-sample accuracy for the temporal backtest."
+        "This tests the model against **every 2025-26 game** for all 10 players — "
+        "games the model never saw during training, so it's a fair, real-world accuracy test."
     )
     st.caption(
-        "**Why this is valid:** The model was trained on 2023-24 and 2024-25 data only. "
-        "The 2025-26 NBA season (Oct 2025 – Jun 2026) is the genuine holdout set. "
-        "MAE here reflects real predictive ability, not overfitting to training data. "
-        "If '2025-26 Games = 0' for any player, re-run `fetch_historical_data.py` to pull the latest data."
+        "The model was trained on 2023-24 and 2024-25 data only, so every 2025-26 game is a genuine test. "
+        "If '2025-26 Games = 0' shows for any player, re-run `fetch_historical_data.py` to pull the latest data."
     )
 
-    if st.button("▶ Run Full Accuracy Audit (all 10 players)", use_container_width=True):
+    if st.button("▶ Run Accuracy Check (all 10 players)", use_container_width=True):
         with st.spinner("Computing predictions on all 2025-26 holdout games..."):
             audit_df = compute_overall_validation(model_bundle)
         if not audit_df.empty:

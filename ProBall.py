@@ -606,21 +606,22 @@ with tab2:
                 "⚠️ Regular Season games show 0 — the regular season data may have been missed during the last fetch "
                 "(likely a temporary API timeout). Re-run `fetch_historical_data.py` to pull the missing games."
             )
-        with st.expander("ℹ️ How are the predictions in this table made? (no data leakage)"):
-            st.write(
-                f"The model was trained **only on games before the 2025-26 season**, so it has never seen "
-                f"the games below. For each game, it was given the real conditions (home/away, back-to-back) "
-                f"plus what it knew about {selected_player} before the season — his overall averages of "
-                f"**{base_p:.1f} PTS / {base_r:.1f} REB / {base_a:.1f} AST / {base_fg*100:.1f}% FG** — "
-                "and its prediction (\"Pred\" columns) is compared against what he actually did "
-                "(\"Actual\" columns)."
-            )
-            st.write(
-                "**Why can these predictions differ slightly from your Tab 1 prediction?** "
-                "Tab 1 uses the player's *current* recent form, while this test only allows *pre-season* "
-                "knowledge — no information from the future is leaked into it. That keeps the accuracy "
-                "test fair, and a small gap between the two predictions is expected and normal."
-            )
+        actual_rows = []
+        for _, row in val_df.iterrows():
+            matchup_str = str(row['MATCHUP'])
+            actual_rows.append({
+                "Date": row['GAME_DATE'].strftime('%Y-%m-%d'),
+                "Season Type": str(row['SEASON_TYPE']) if has_season_type else 'Regular Season',
+                "Matchup": matchup_str,
+                "Home/Away": "Home" if "vs" in matchup_str else "Away",
+                "B2B": "Yes" if int(row['IS_B2B']) else "No",
+                "Result": str(row['WL']) if 'WL' in row.index else '—',
+                "PTS": row['PTS'],
+                "REB": row['REB'],
+                "AST": row['AST'],
+                "FG%": f"{row['FG_PCT']*100:.1f}%" if 'FG_PCT' in row.index else '—',
+            })
+        st.dataframe(pd.DataFrame(actual_rows), use_container_width=True, hide_index=True)
 
         records = []
         absolute_errors = []
@@ -675,55 +676,12 @@ with tab2:
             })
 
         verify_display_df = pd.DataFrame(records)
-        st.dataframe(verify_display_df, use_container_width=True, hide_index=True)
-
-        st.subheader("📏 Model Accuracy on These Games")
-        st.caption(
-            "These numbers summarize the table above: on average, how far the model's predictions "
-            "were from the real results."
-        )
 
         mean_error = np.mean(absolute_errors)
         mean_reb_error = np.mean(reb_absolute_errors)
         mean_ast_error = np.mean(ast_absolute_errors)
         mean_fgp_error = np.mean(fgp_absolute_errors) if fgp_absolute_errors else 0.0
         accuracy_est = max(0.0, 100.0 - (mean_error / base_p * 100)) if base_p > 0 else 0.0
-
-        v1, v2, v3, v4, v5 = st.columns(5)
-        v1.metric("Points — Avg Miss", f"±{mean_error:.1f} pts",
-                  help="On average, the predicted points were this far from the player's actual points.")
-        v2.metric("Rebounds — Avg Miss", f"±{mean_reb_error:.1f}",
-                  help="On average, the predicted rebounds were this far from the actual rebounds.")
-        v3.metric("Assists — Avg Miss", f"±{mean_ast_error:.1f}",
-                  help="On average, the predicted assists were this far from the actual assists.")
-        v4.metric("FG% — Avg Miss", f"±{mean_fgp_error*100:.1f}%",
-                  help="On average, the predicted field-goal percentage was this far from the actual one.")
-        v5.metric("Points Accuracy", f"{accuracy_est:.1f}%",
-                  help="How close the point predictions were overall — 100% would mean a perfect prediction every game.")
-        st.caption(
-            "💡 Smaller \"miss\" numbers mean better predictions. "
-            "For reference, most fans surveyed said 80–90% accuracy is good enough to trust a prediction system."
-        )
-
-        if len(absolute_errors) >= 3:
-            st.subheader("📊 Predicted vs Actual Points")
-            cmp_data = pd.DataFrame({
-                'Game': verify_display_df['Date'].str[-5:],
-                'Predicted': verify_display_df['Pred PTS'].values,
-                'Actual': verify_display_df['Actual PTS'].values
-            })
-            cmp_melted = cmp_data.melt(id_vars='Game', var_name='Type', value_name='PTS')
-            fig_cmp, ax_cmp = plt.subplots(figsize=(8, 3))
-            sns.barplot(data=cmp_melted, x='Game', y='PTS', hue='Type',
-                        palette={'Predicted': 'steelblue', 'Actual': 'coral'}, ax=ax_cmp)
-            ax_cmp.set_xlabel('Game Date (MM-DD)')
-            ax_cmp.set_ylabel('Points')
-            ax_cmp.set_title(f'Predicted vs Actual PTS — {selected_player} vs {selected_opponent}')
-            ax_cmp.legend(title='', fontsize=8)
-            plt.tight_layout()
-            st.pyplot(fig_cmp)
-            plt.close(fig_cmp)
-            st.caption("Blue = predicted · Orange = what actually happened. When the two bars are close in height, the prediction was accurate.")
 
         st.markdown("---")
         st.subheader("③ Final Comparison — Your Prediction vs Same-Condition Games")
@@ -773,6 +731,16 @@ with tab2:
                 st.dataframe(pd.DataFrame(final_rows), use_container_width=True, hide_index=True)
 
                 pts_gap = abs(scenario['p_pts'] - act_pts)
+                pred_accuracy = max(0.0, 100.0 - (pts_gap / act_pts * 100)) if act_pts > 0 else 0.0
+                st.progress(
+                    min(1.0, pred_accuracy / 100),
+                    text=f"🎯 This prediction's Points Accuracy: **{pred_accuracy:.1f}%**"
+                )
+                st.caption(
+                    f"How close *your* prediction came to the real result. Compare it with the model's "
+                    f"overall accuracy of **{accuracy_est:.1f}%** across all {len(val_df)} real game(s) "
+                    "in the section below."
+                )
                 if pts_gap <= mean_error:
                     st.success(
                         f"✅ Your prediction was off by only **{pts_gap:.1f} points** — within the model's "
@@ -789,6 +757,65 @@ with tab2:
                 "💡 Run a prediction in **Tab 1** first — this section will then automatically find the real "
                 "games that match your chosen conditions (venue and rest) and compare them side by side."
             )
+
+        st.markdown("---")
+        st.subheader("📏 Model Accuracy for These Games")
+        st.caption(
+            "Behind the scenes, the model also re-predicted every real game above under its actual "
+            "conditions. These numbers show how far those predictions were from the real results."
+        )
+        v1, v2, v3, v4, v5 = st.columns(5)
+        v1.metric("Points — Avg Miss", f"±{mean_error:.1f} pts",
+                  help="On average, the predicted points were this far from the player's actual points.")
+        v2.metric("Rebounds — Avg Miss", f"±{mean_reb_error:.1f}",
+                  help="On average, the predicted rebounds were this far from the actual rebounds.")
+        v3.metric("Assists — Avg Miss", f"±{mean_ast_error:.1f}",
+                  help="On average, the predicted assists were this far from the actual assists.")
+        v4.metric("FG% — Avg Miss", f"±{mean_fgp_error*100:.1f}%",
+                  help="On average, the predicted field-goal percentage was this far from the actual one.")
+        v5.metric("Points Accuracy", f"{accuracy_est:.1f}%",
+                  help="How close the point predictions were overall — 100% would mean a perfect prediction every game.")
+        st.caption(
+            "💡 Smaller \"miss\" numbers mean better predictions. "
+            "For reference, most fans surveyed said 80–90% accuracy is good enough to trust a prediction system."
+        )
+
+        if len(absolute_errors) >= 3:
+            st.subheader("📊 Predicted vs Actual Points")
+            cmp_data = pd.DataFrame({
+                'Game': verify_display_df['Date'].str[-5:],
+                'Predicted': verify_display_df['Pred PTS'].values,
+                'Actual': verify_display_df['Actual PTS'].values
+            })
+            cmp_melted = cmp_data.melt(id_vars='Game', var_name='Type', value_name='PTS')
+            fig_cmp, ax_cmp = plt.subplots(figsize=(8, 3))
+            sns.barplot(data=cmp_melted, x='Game', y='PTS', hue='Type',
+                        palette={'Predicted': 'steelblue', 'Actual': 'coral'}, ax=ax_cmp)
+            ax_cmp.set_xlabel('Game Date (MM-DD)')
+            ax_cmp.set_ylabel('Points')
+            ax_cmp.set_title(f'Predicted vs Actual PTS — {selected_player} vs {selected_opponent}')
+            ax_cmp.legend(title='', fontsize=8)
+            plt.tight_layout()
+            st.pyplot(fig_cmp)
+            plt.close(fig_cmp)
+            st.caption("Blue = predicted · Orange = what actually happened. When the two bars are close in height, the prediction was accurate.")
+
+        with st.expander("🔍 See the model's game-by-game predictions (no data leakage)"):
+            st.write(
+                f"The model was trained **only on games before the 2025-26 season**, so it has never seen "
+                f"the games above. For each game, it was given the real conditions (home/away, back-to-back) "
+                f"plus what it knew about {selected_player} before the season — his overall averages of "
+                f"**{base_p:.1f} PTS / {base_r:.1f} REB / {base_a:.1f} AST / {base_fg*100:.1f}% FG** — "
+                "and its prediction (\"Pred\" columns) is compared against what he actually did "
+                "(\"Actual\" columns)."
+            )
+            st.write(
+                "**Why can these predictions differ slightly from your Tab 1 prediction?** "
+                "Tab 1 uses the player's *current* recent form, while this test only allows *pre-season* "
+                "knowledge — no information from the future is leaked into it. That keeps the accuracy "
+                "test fair, and a small gap between the two predictions is expected and normal."
+            )
+            st.dataframe(verify_display_df, use_container_width=True, hide_index=True)
 
 
 # =========================================================

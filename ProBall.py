@@ -535,39 +535,39 @@ with tab1:
 # =========================================================
 with tab2:
     st.info(
-        "This tab shows every real 2025-26 game between your selected player and opponent, "
-        "and compares what the model **predicted** against what **actually happened**. "
-        "The model never saw these games during training, so this is a fair test of its accuracy."
+        "This tab checks the model against reality, in 3 steps: "
+        "**① Your prediction** from Tab 1 · **② What actually happened** in real 2025-26 games · "
+        "**③ How close** the model's predictions were."
     )
 
+    st.subheader("① Your Prediction (from Tab 1)")
     scenario = st.session_state.get('last_scenario', {})
     if scenario and scenario.get('player') == selected_player and scenario.get('opponent') == selected_opponent:
         with st.container(border=True):
-            st.markdown(f"**📌 Your Tab 1 Scenario Projection** *(for reference)*")
             venue_label = "Home" if scenario['is_home'] else "Away"
             fatigue_label = "Back-to-Back" if scenario['is_b2b'] else "Normal Rest"
             sr1, sr2, sr3, sr4, sr5 = st.columns([2, 1, 1, 1, 1])
             sr1.markdown(
-                f"**Conditions:** {venue_label} · {fatigue_label}  \n"
-                f"DEF Rank #{scenario['def_rank']} ({scenario['tier_label']})"
+                f"**Conditions you chose:** {venue_label} · {fatigue_label}  \n"
+                f"Opponent defense: #{scenario['def_rank']} ({scenario['tier_label']})"
             )
-            sr2.metric("Scenario PTS", f"{scenario['p_pts']:.1f}")
-            sr3.metric("Scenario REB", f"{scenario['p_reb']:.1f}")
-            sr4.metric("Scenario AST", f"{scenario['p_ast']:.1f}")
-            sr5.metric("Scenario FG%", f"{scenario.get('p_fgp', 0)*100:.1f}%")
+            sr2.metric("Predicted PTS", f"{scenario['p_pts']:.1f}")
+            sr3.metric("Predicted REB", f"{scenario['p_reb']:.1f}")
+            sr4.metric("Predicted AST", f"{scenario['p_ast']:.1f}")
+            sr5.metric("Predicted FG%", f"{scenario.get('p_fgp', 0)*100:.1f}%")
             st.caption(
-                f"Baseline used in Tab 1: H2H averages "
-                f"({scenario['baseline_pts']:.1f} PTS / {scenario['baseline_reb']:.1f} REB / {scenario['baseline_ast']:.1f} AST). "
-                "Compare these numbers against the model predictions and actuals in the table below."
+                f"For comparison, {scenario['player']}'s usual stats vs this opponent in past seasons: "
+                f"**{scenario['baseline_pts']:.1f} PTS / {scenario['baseline_reb']:.1f} REB / {scenario['baseline_ast']:.1f} AST**"
             )
     else:
         st.caption(
-            "💡 **Tip:** Run the ML Simulator in Tab 1 first — your scenario will appear here "
-            "as a reference card so you can compare it directly against real game results."
+            "💡 No prediction yet — go to **Tab 1**, choose the game conditions, and click "
+            "**🔮 Predict Performance**. Your prediction will then appear here so you can "
+            "compare it against real games."
         )
 
     st.markdown("---")
-    st.subheader("📉 Prediction vs Reality — 2025-26 Season Results")
+    st.subheader("② What Actually Happened — Real 2025-26 Games")
 
     if is_fallback or all_player_df.empty:
         st.error(
@@ -606,11 +606,15 @@ with tab2:
                 "⚠️ Regular Season games show 0 — the regular season data may have been missed during the last fetch "
                 "(likely a temporary API timeout). Re-run `fetch_historical_data.py` to pull the missing games."
             )
-        st.caption(
-            f"Training baseline (pre-2025-26 overall avg): "
-            f"{base_p:.1f} PTS / {base_r:.1f} REB / {base_a:.1f} AST / {base_fg*100:.1f}% FG — "
-            "this is what the model knew going into the 2025-26 season."
-        )
+        with st.expander("ℹ️ How are the predictions in this table made?"):
+            st.write(
+                f"The model was trained **only on games before the 2025-26 season**, so it has never seen "
+                f"the games below. For each game, it was given the real conditions (home/away, back-to-back) "
+                f"plus what it knew about {selected_player} before the season — his overall averages of "
+                f"**{base_p:.1f} PTS / {base_r:.1f} REB / {base_a:.1f} AST / {base_fg*100:.1f}% FG** — "
+                "and its prediction (\"Pred\" columns) is compared against what he actually did "
+                "(\"Actual\" columns)."
+            )
 
         records = []
         absolute_errors = []
@@ -667,6 +671,13 @@ with tab2:
         verify_display_df = pd.DataFrame(records)
         st.dataframe(verify_display_df, use_container_width=True, hide_index=True)
 
+        st.markdown("---")
+        st.subheader("③ How Close Were the Predictions?")
+        st.caption(
+            "These numbers summarize the table above: on average, how far the model's predictions "
+            "were from the real results."
+        )
+
         mean_error = np.mean(absolute_errors)
         mean_reb_error = np.mean(reb_absolute_errors)
         mean_ast_error = np.mean(ast_absolute_errors)
@@ -690,7 +701,6 @@ with tab2:
         )
 
         if len(absolute_errors) >= 3:
-            st.markdown("---")
             st.subheader("📊 Predicted vs Actual Points")
             cmp_data = pd.DataFrame({
                 'Game': verify_display_df['Date'].str[-5:],
@@ -801,12 +811,3 @@ with tab3:
                 st.bar_chart(chart_data, height=300)
         else:
             st.warning("No validation data computed — ensure the model bundle is loaded and 2025-26 data exists in the CSV.")
-
-    st.markdown("---")
-    st.subheader("🛡️ Defensive Ranking Configuration")
-    if is_live_api:
-        st.success(f"✅ Live NBA API · Season: **{def_season}** · Rankings auto-refresh every hour.")
-    else:
-        st.info(f"📋 Using 2025-26 local fallback rankings (NBA API offline). Data source: 2025-26 Regular Season DEF_RATING.")
-    st.write(f"**{selected_opponent}** → Rank **#{opponent_def_rank}** ({tier_label}) · DEF Rating: **{auto_rating if auto_rating else '—'}**")
-    st.caption(f"Defensive modifier applied to PTS/AST projections: **{def_mod:.2f}x**")

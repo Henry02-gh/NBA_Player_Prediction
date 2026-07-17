@@ -537,7 +537,7 @@ with tab2:
     st.info(
         "This tab checks the model against reality, in 3 steps: "
         "**① Your prediction** from Tab 1 · **② What actually happened** in real 2025-26 games · "
-        "**③ How close** the model's predictions were."
+        "**③ Final comparison** — your prediction vs the real games that match your chosen conditions."
     )
 
     st.subheader("① Your Prediction (from Tab 1)")
@@ -606,7 +606,7 @@ with tab2:
                 "⚠️ Regular Season games show 0 — the regular season data may have been missed during the last fetch "
                 "(likely a temporary API timeout). Re-run `fetch_historical_data.py` to pull the missing games."
             )
-        with st.expander("ℹ️ How are the predictions in this table made?"):
+        with st.expander("ℹ️ How are the predictions in this table made? (no data leakage)"):
             st.write(
                 f"The model was trained **only on games before the 2025-26 season**, so it has never seen "
                 f"the games below. For each game, it was given the real conditions (home/away, back-to-back) "
@@ -614,6 +614,12 @@ with tab2:
                 f"**{base_p:.1f} PTS / {base_r:.1f} REB / {base_a:.1f} AST / {base_fg*100:.1f}% FG** — "
                 "and its prediction (\"Pred\" columns) is compared against what he actually did "
                 "(\"Actual\" columns)."
+            )
+            st.write(
+                "**Why can these predictions differ slightly from your Tab 1 prediction?** "
+                "Tab 1 uses the player's *current* recent form, while this test only allows *pre-season* "
+                "knowledge — no information from the future is leaked into it. That keeps the accuracy "
+                "test fair, and a small gap between the two predictions is expected and normal."
             )
 
         records = []
@@ -671,8 +677,7 @@ with tab2:
         verify_display_df = pd.DataFrame(records)
         st.dataframe(verify_display_df, use_container_width=True, hide_index=True)
 
-        st.markdown("---")
-        st.subheader("③ How Close Were the Predictions?")
+        st.subheader("📏 Model Accuracy on These Games")
         st.caption(
             "These numbers summarize the table above: on average, how far the model's predictions "
             "were from the real results."
@@ -719,6 +724,71 @@ with tab2:
             st.pyplot(fig_cmp)
             plt.close(fig_cmp)
             st.caption("Blue = predicted · Orange = what actually happened. When the two bars are close in height, the prediction was accurate.")
+
+        st.markdown("---")
+        st.subheader("③ Final Comparison — Your Prediction vs Same-Condition Games")
+        if scenario and scenario.get('player') == selected_player and scenario.get('opponent') == selected_opponent:
+            sc_home = scenario['is_home']
+            sc_b2b = scenario['is_b2b']
+            venue_label = "Home" if sc_home else "Away"
+            fatigue_label = "Back-to-Back" if sc_b2b else "Normal Rest"
+            is_home_series = val_df['MATCHUP'].astype(str).str.contains('vs').astype(int)
+            matched_df = val_df[(is_home_series == sc_home) & (val_df['IS_B2B'].astype(int) == sc_b2b)]
+            st.caption(
+                f"Your Tab 1 prediction was for a **{venue_label} game · {fatigue_label}**. "
+                f"Out of the **{len(val_df)}** real game(s) above, **{len(matched_df)}** matched these exact conditions."
+            )
+            if matched_df.empty:
+                st.warning(
+                    "No real 2025-26 games were played under these exact conditions. "
+                    "Compare cautiously against the table above — or go back to **Tab 1** and change the "
+                    "conditions (venue / rest) to match one of the real games."
+                )
+            else:
+                if len(matched_df) == 1:
+                    game_row = matched_df.iloc[0]
+                    st.write(
+                        f"Matching game: **{game_row['GAME_DATE'].strftime('%Y-%m-%d')}** ({game_row['MATCHUP']})"
+                    )
+                else:
+                    match_dates = ", ".join(matched_df.sort_values('GAME_DATE')['GAME_DATE'].dt.strftime('%Y-%m-%d'))
+                    st.write(f"Comparing against the **average of {len(matched_df)} matching games**: {match_dates}")
+
+                act_pts = matched_df['PTS'].mean()
+                act_reb = matched_df['REB'].mean()
+                act_ast = matched_df['AST'].mean()
+                act_fgp = matched_df['FG_PCT'].mean() if 'FG_PCT' in matched_df.columns else None
+                final_rows = [
+                    {"Stat": "Points",   "Your Prediction": f"{scenario['p_pts']:.1f}", "What Really Happened": f"{act_pts:.1f}", "Difference": f"{scenario['p_pts'] - act_pts:+.1f}"},
+                    {"Stat": "Rebounds", "Your Prediction": f"{scenario['p_reb']:.1f}", "What Really Happened": f"{act_reb:.1f}", "Difference": f"{scenario['p_reb'] - act_reb:+.1f}"},
+                    {"Stat": "Assists",  "Your Prediction": f"{scenario['p_ast']:.1f}", "What Really Happened": f"{act_ast:.1f}", "Difference": f"{scenario['p_ast'] - act_ast:+.1f}"},
+                ]
+                if act_fgp is not None:
+                    final_rows.append({
+                        "Stat": "Field Goal %",
+                        "Your Prediction": f"{scenario.get('p_fgp', 0)*100:.1f}%",
+                        "What Really Happened": f"{act_fgp*100:.1f}%",
+                        "Difference": f"{(scenario.get('p_fgp', 0) - act_fgp)*100:+.1f}%"
+                    })
+                st.dataframe(pd.DataFrame(final_rows), use_container_width=True, hide_index=True)
+
+                pts_gap = abs(scenario['p_pts'] - act_pts)
+                if pts_gap <= mean_error:
+                    st.success(
+                        f"✅ Your prediction was off by only **{pts_gap:.1f} points** — within the model's "
+                        f"typical miss of ±{mean_error:.1f} pts for this matchup. A reliable prediction!"
+                    )
+                else:
+                    st.info(
+                        f"Your prediction was off by **{pts_gap:.1f} points** — a bit more than the typical "
+                        f"miss of ±{mean_error:.1f} pts. Keep in mind only {len(matched_df)} game(s) matched "
+                        "your conditions, and a single game can swing a lot."
+                    )
+        else:
+            st.caption(
+                "💡 Run a prediction in **Tab 1** first — this section will then automatically find the real "
+                "games that match your chosen conditions (venue and rest) and compare them side by side."
+            )
 
 
 # =========================================================

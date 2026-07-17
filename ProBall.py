@@ -823,46 +823,13 @@ with tab2:
 # =========================================================
 with tab3:
     st.info(
-        "A quick summary of how accurate the prediction model is, "
-        "plus an accuracy check across all 10 players."
+        "Test the model's accuracy across all 10 players — every real 2025-26 game, "
+        "checked in one click."
     )
 
-    if model_bundle:
-        mae_vals  = model_bundle.get("mae", [])
-        p_mae_all = model_bundle.get("player_mae", {})
-        p_tg_all  = model_bundle.get("player_train_games", {})
-
-        if mae_vals:
-            st.subheader("📊 How Accurate Is the Model?")
-            sel_mae = p_mae_all.get(selected_player, [])
-            tg = p_tg_all.get(selected_player, '?')
-            if sel_mae and all(v is not None for v in sel_mae):
-                st.caption(
-                    f"Showing **{selected_player}**'s personal prediction model, built from **{tg} past games**. "
-                    "Each number shows how far off the predictions typically are — smaller is better."
-                )
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Points", f"±{sel_mae[0]:.1f} pts")
-                m2.metric("Rebounds", f"±{sel_mae[1]:.1f}")
-                m3.metric("Assists", f"±{sel_mae[2]:.1f}")
-                m4.metric("Field Goal %", f"±{sel_mae[3]*100:.1f}%")
-            else:
-                st.caption(
-                    f"No 2025-26 test games for **{selected_player}** yet — showing the average across all players. "
-                    "Each number shows how far off the predictions typically are — smaller is better."
-                )
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Points", f"±{mae_vals[0]:.1f} pts")
-                m2.metric("Rebounds", f"±{mae_vals[1]:.1f}")
-                m3.metric("Assists", f"±{mae_vals[2]:.1f}")
-                if len(mae_vals) >= 4 and mae_vals[3] is not None:
-                    m4.metric("Field Goal %", f"±{mae_vals[3]*100:.1f}%")
-            st.markdown("---")
-
-    else:
+    if not model_bundle:
         st.warning("No model bundle loaded. Run `train_models.py` to generate the model.")
 
-    st.markdown("---")
     st.subheader("📋 Accuracy Check — All 10 Players (2025-26 Season)")
     st.write(
         "This tests the model against **every 2025-26 game** for all 10 players — "

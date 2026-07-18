@@ -255,7 +255,7 @@ else:
 opponent_def_rank = st.sidebar.slider(
     "Adjust Rank for Prediction (simulate future changes)",
     min_value=1, max_value=30, value=default_rank,
-    help=f"Default = actual {def_season} rank. Drag to simulate how a different defensive strength would affect the projection."
+    help=f"Default = actual {def_season} rank. Drag to simulate a different defensive strength — the prediction then uses the DEF rating of the team currently at that rank."
 )
 
 with st.sidebar.expander("📋 All 30 Teams — 2025-26 Rankings"):
@@ -265,16 +265,24 @@ with st.sidebar.expander("📋 All 30 Teams — 2025-26 Rankings"):
         ref_rows.append({"Rank": rank, "Team": team_name, "DEF Rating": rating})
     st.dataframe(pd.DataFrame(ref_rows), use_container_width=True, hide_index=True, height=300)
 
+# Continuous defensive modifier: the actual DEF rating of the team at the selected
+# rank, relative to the league average. DEF rating = points allowed per 100
+# possessions, so rating / league average directly scales expected scoring.
+rank_to_rating = {rank: def_ratings[abbr] for abbr, rank in def_ranks.items() if abbr in def_ratings}
+league_avg_rating = float(np.mean(list(def_ratings.values()))) if def_ratings else 115.0
+mod_rating = rank_to_rating.get(opponent_def_rank, league_avg_rating)
+def_mod = mod_rating / league_avg_rating
+
 if opponent_def_rank <= 8:
     tier_label = "Elite Defense 🔒"
-    def_mod = 0.93
 elif opponent_def_rank >= 22:
     tier_label = "Weak Defense 🔓"
-    def_mod = 1.05
 else:
     tier_label = "Average Defense ⚖️"
-    def_mod = 1.00
-st.sidebar.caption(f"Tier: **{tier_label}** → **{def_mod:.2f}x** modifier on PTS/AST projections")
+st.sidebar.caption(
+    f"DEF Rating **{mod_rating:.1f}** vs league avg **{league_avg_rating:.1f}** "
+    f"→ **{def_mod:.3f}x** modifier on PTS/AST projections"
+)
 
 try:
     csv_mtime = os.path.getmtime("nba_historical_data.csv")
@@ -437,13 +445,13 @@ with tab1:
         if auto_rating:
             dc4.metric("DEF Rating", f"{auto_rating}", help="Points allowed per 100 possessions — lower = better defense")
         else:
-            dc4.metric("Score Modifier", f"{def_mod:.2f}x")
+            dc4.metric("Score Modifier", f"{def_mod:.3f}x")
         source_note = (
             f"📡 Auto-fetched from NBA Stats API ({def_season} Regular Season) · updates hourly"
             if def_ranks else
             "⚠️ Live API unavailable — rank set manually in sidebar"
         )
-        st.caption(f"{source_note}  |  Modifier **{def_mod:.2f}x** applied to PTS & AST projections")
+        st.caption(f"{source_note}  |  Modifier **{def_mod:.3f}x** applied to PTS & AST projections (team's DEF rating ÷ league average)")
 
     st.markdown("---")
     st.subheader("🔮 Predict the Next Game")
@@ -520,7 +528,7 @@ with tab1:
             c4.metric("Projected FG%", f"{p_fgp*100:.1f}%", delta=f"{(p_fgp - baseline_fgp)*100:+.1f}pp vs H2H Avg")
             st.caption(
                 f"Baseline: H2H averages ({baseline_pts:.1f} PTS / {baseline_reb:.1f} REB / {baseline_ast:.1f} AST / {baseline_fgp*100:.1f}% FG)  "
-                f"| Defense modifier: **{def_mod:.2f}x** (Rank #{opponent_def_rank} — {tier_label})"
+                f"| Defense modifier: **{def_mod:.3f}x** (Rank #{opponent_def_rank} — {tier_label})"
             )
             st.success(
                 "✅ Prediction saved. Open the **How Accurate Is It?** tab to see real 2025-26 game results "

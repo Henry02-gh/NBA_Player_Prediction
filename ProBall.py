@@ -296,8 +296,8 @@ tab1, tab2, tab3 = st.tabs(["📊 Player Stats & Prediction", "📉 How Accurate
 # =========================================================
 with tab1:
     st.info(
-        "Browse the player's stats and history against this opponent, then scroll down to "
-        "**predict their next game**. ➡️ Afterwards, open the **How Accurate Is It?** tab to see how "
+        "Guideline: Browse the player's stats and history against this opponent, then scroll down to "
+        "**predict their next game**. Afterwards, open the **How Accurate Is It?** tab to see how "
         "the predictions compare against real game results."
     )
 
@@ -306,7 +306,7 @@ with tab1:
         if recent_season.empty:
             recent_season = all_player_df
 
-        st.subheader(f"📊 {selected_player} — Last 2 Seasons Overview (2024-25 & 2025-26)")
+        st.subheader(f"📊 {selected_player} — Seasons Overview")
         ov1, ov2, ov3, ov4, ov5 = st.columns(5)
         ov1.metric("Games Played", len(recent_season))
         ov2.metric("PTS Avg", f"{recent_season['PTS'].mean():.1f}")

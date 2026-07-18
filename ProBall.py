@@ -306,7 +306,7 @@ with tab1:
         if recent_season.empty:
             recent_season = all_player_df
 
-        st.subheader(f"📊 {selected_player} — Seasons Overview")
+        st.subheader(f"📊 {selected_player} — Last 2 Seasons Overview")
         ov1, ov2, ov3, ov4, ov5 = st.columns(5)
         ov1.metric("Games Played", len(recent_season))
         ov2.metric("PTS Avg", f"{recent_season['PTS'].mean():.1f}")

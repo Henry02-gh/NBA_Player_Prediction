@@ -306,12 +306,12 @@ with tab1:
         if recent_season.empty:
             recent_season = all_player_df
 
-        st.subheader(f"📊 {selected_player} — Current Season Overview")
+        st.subheader(f"📊 {selected_player} — Last 2 Seasons Overview (2024-25 & 2025-26)")
         ov1, ov2, ov3, ov4, ov5 = st.columns(5)
         ov1.metric("Games Played", len(recent_season))
-        ov2.metric("Season PTS Avg", f"{recent_season['PTS'].mean():.1f}")
-        ov3.metric("Season REB Avg", f"{recent_season['REB'].mean():.1f}")
-        ov4.metric("Season AST Avg", f"{recent_season['AST'].mean():.1f}")
+        ov2.metric("PTS Avg", f"{recent_season['PTS'].mean():.1f}")
+        ov3.metric("REB Avg", f"{recent_season['REB'].mean():.1f}")
+        ov4.metric("AST Avg", f"{recent_season['AST'].mean():.1f}")
         wins = (recent_season['WL'] == 'W').sum() if 'WL' in recent_season.columns else 0
         ov5.metric("Win Rate", f"{wins / len(recent_season) * 100:.0f}%")
         st.markdown("---")

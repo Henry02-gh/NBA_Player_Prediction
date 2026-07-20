@@ -827,7 +827,7 @@ with tab2:
 
 
 # =========================================================
-# TAB 3: PIPELINE MAINTENANCE
+# TAB 3: Model Advanced (backtesting)
 # =========================================================
 with tab3:
     st.info(

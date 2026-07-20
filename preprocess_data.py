@@ -9,10 +9,10 @@ df = df.sort_values(by=['PLAYER_NAME', 'GAME_DATE']).reset_index(drop=True)
 
 print("Processing raw features...")
 
-# Home vs Away flag
+# Home vs Away 
 df['IS_HOME'] = df['MATCHUP'].apply(lambda x: 0 if '@' in str(x) else 1)
 
-# Back-to-back flag (same logic as train_models.py for consistency)
+# Back-to-back 
 df['DAYS_SINCE_LAST'] = df.groupby('PLAYER_NAME')['GAME_DATE'].diff().dt.days
 df['IS_B2B'] = np.where(df['DAYS_SINCE_LAST'] <= 1, 1, 0)
 
@@ -22,7 +22,6 @@ for stat in ['PTS', 'REB', 'AST']:
         .transform(lambda x: x.shift(1).rolling(window=5, min_periods=1).mean())
     )
 
-# Fill NaN from each player's first games with their own career mean
 for stat in ['PTS', 'REB', 'AST']:
     player_means = df.groupby('PLAYER_NAME')[stat].transform('mean')
     df[f'RECENT_{stat}_AVG'] = df[f'RECENT_{stat}_AVG'].fillna(player_means)
